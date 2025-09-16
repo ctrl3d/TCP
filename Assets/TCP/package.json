@@ -1,0 +1,21 @@
+﻿{
+  "name": "work.ctrl3d.tcp",
+  "version": "0.1.0",
+  "displayName": "TCP",
+  "description": "",
+  "unity": "2022.1",
+  "documentationUrl": "https://ctrl3d.github.io/TCP",
+  "changelogUrl": "https://github.com/ctrl3d/TCP/blob/main/CHANGELOG.md",
+  "licensesUrl": "https://github.com/ctrl3d/TCP/blob/main/LICENSE",
+  "dependencies": {
+  },
+  "keywords": [
+    "unity",
+    "tcp"
+  ],
+  "author": {
+    "name": "Seungmin Lee",
+    "email": "ctrl3d@gmail.com",
+    "url": "https://ctrl3d.work"
+  }
+}

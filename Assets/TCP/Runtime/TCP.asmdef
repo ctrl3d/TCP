@@ -1,0 +1,29 @@
+{
+    "name": "TCP",
+    "rootNamespace": "work.ctrl3d",
+    "references": [
+        "GUID:48f782738794458695a663940b5314f4",
+        "GUID:88be65f96b86746888c927a5c8ff3534",
+        "GUID:56293a2b447f6ea42b729f7f0e65cbdc"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [
+        {
+            "name": "com.annulusgames.alchemy",
+            "expression": "",
+            "define": "USE_ALCHEMY"
+        },
+        {
+            "name": "work.ctrl3d.json-config",
+            "expression": "",
+            "define": "USE_JSONCONFIG"
+        }
+    ],
+    "noEngineReferences": false
+}
