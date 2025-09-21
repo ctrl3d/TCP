@@ -1,3 +1,3 @@
 ```
-https://github.com/ctrl3d/TCP?path=Assets/TCP
+https://github.com/ctrl3d/TCP.git?path=Assets/TCP
 ```
