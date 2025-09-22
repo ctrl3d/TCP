@@ -60,7 +60,7 @@ namespace work.ctrl3d
         public UnityEvent onDisconnected;
         public UnityEvent<string> onNameRegistered;
         public UnityEvent onNameTaken;
-        public UnityEvent<string, string> onDirectMessageReceived; // sender, message
+        public UnityEvent<string, string> onRelayMessageReceived; // sender, message
         public UnityEvent<string[]> onClientListReceived; // client names
         public UnityEvent<int> onReconnectAttempt; // 재접속 시도 횟수
         public UnityEvent onReconnectSuccess; // 재접속 성공
@@ -200,7 +200,7 @@ namespace work.ctrl3d
             _tcpClient.OnDisconnected += HandleDisconnected;
             _tcpClient.OnNameRegistered += HandleNameRegistered;
             _tcpClient.OnNameTaken += HandleNameTaken;
-            _tcpClient.OnDirectMessageReceived += HandleDirectMessageReceived;
+            _tcpClient.OnRelayMessageReceived += HandleRelayMessageReceived;
             _tcpClient.OnClientListReceived += HandleClientListReceived;
             _tcpClient.OnConnectionFailed += HandleConnectionFailed;
         }
@@ -227,7 +227,7 @@ namespace work.ctrl3d
                 _tcpClient.OnDisconnected -= HandleDisconnected;
                 _tcpClient.OnNameRegistered -= HandleNameRegistered;
                 _tcpClient.OnNameTaken -= HandleNameTaken;
-                _tcpClient.OnDirectMessageReceived -= HandleDirectMessageReceived;
+                _tcpClient.OnRelayMessageReceived -= HandleRelayMessageReceived;
                 _tcpClient.OnClientListReceived -= HandleClientListReceived;
                 _tcpClient.OnConnectionFailed -= HandleConnectionFailed;
                 
@@ -251,7 +251,7 @@ namespace work.ctrl3d
             _tcpClient.OnDisconnected -= HandleDisconnected;
             _tcpClient.OnNameRegistered -= HandleNameRegistered;
             _tcpClient.OnNameTaken -= HandleNameTaken;
-            _tcpClient.OnDirectMessageReceived -= HandleDirectMessageReceived;
+            _tcpClient.OnRelayMessageReceived -= HandleRelayMessageReceived;
             _tcpClient.OnClientListReceived -= HandleClientListReceived;
             _tcpClient.OnConnectionFailed -= HandleConnectionFailed;
                 
@@ -688,12 +688,12 @@ namespace work.ctrl3d
             });
         }
         
-        private void HandleDirectMessageReceived(string senderName, string message)
+        private void HandleRelayMessageReceived(string senderName, string message)
         {
             _mainThreadActions.Enqueue(() =>
             {
                 Log($"{senderName}에게서 개인 메시지: {message}");
-                onDirectMessageReceived?.Invoke(senderName, message);
+                onRelayMessageReceived?.Invoke(senderName, message);
             });
         }
 

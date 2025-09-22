@@ -212,7 +212,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3339299067910932635, guid: 85d95b485f99cb84c8256b7967ef61ac, type: 3}
       propertyPath: m_IsActive
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -585,6 +585,10 @@ PrefabInstance:
     - target: {fileID: 3339299067910932635, guid: 85d95b485f99cb84c8256b7967ef61ac, type: 3}
       propertyPath: m_Name
       value: UnityTCPClient
+      objectReference: {fileID: 0}
+    - target: {fileID: 3339299067910932635, guid: 85d95b485f99cb84c8256b7967ef61ac, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

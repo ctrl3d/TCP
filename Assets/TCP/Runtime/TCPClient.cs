@@ -2,6 +2,7 @@ using System;
 using System.Net.Sockets;
 using System.Text;
 using work.ctrl3d.Logger;
+using work.ctrl3d.Constants;
 
 namespace work.ctrl3d
 {
@@ -24,7 +25,7 @@ namespace work.ctrl3d
         public event Action<string> OnNameRegistered;
         public event Action OnNameTaken;
         public event Action<string[]> OnClientListReceived;
-        public event Action<string, string> OnDirectMessageReceived; // sender, message
+        public event Action<string, string> OnRelayMessageReceived; // sender, message
         public event Action<string> OnConnectionFailed; // 연결 실패 이벤트
         public event Action<string> OnKicked; // 킥 당했을 때 이벤트
 
@@ -189,7 +190,7 @@ namespace work.ctrl3d
 
             if (_disposed) throw new ObjectDisposedException(nameof(TCPClient));
 
-            var formattedMessage = $"TO:{targetClientName}:{message}";
+            var formattedMessage = SystemMessages.FormatToMessage(targetClientName, message);
             SendRawMessage(formattedMessage);
         }
 
@@ -212,7 +213,7 @@ namespace work.ctrl3d
 
             if (_disposed) throw new ObjectDisposedException(nameof(TCPClient));
 
-            var formattedMessage = $"BROADCAST:{message}";
+            var formattedMessage = SystemMessages.FormatBroadcastMessage(message);
             SendRawMessage(formattedMessage);
         }
 
@@ -235,7 +236,7 @@ namespace work.ctrl3d
 
             if (_disposed) throw new ObjectDisposedException(nameof(TCPClient));
 
-            SendRawMessage("GET_CLIENTS");
+            SendRawMessage(SystemMessages.GetClients);
         }
 
         /// <summary>
@@ -257,7 +258,7 @@ namespace work.ctrl3d
 
             if (_disposed) throw new ObjectDisposedException(nameof(TCPClient));
 
-            SendRawMessage("GET_USERS");
+            SendRawMessage(SystemMessages.GetUsers);
         }
 
         /// <summary>
@@ -279,7 +280,7 @@ namespace work.ctrl3d
 
             if (_disposed) throw new ObjectDisposedException(nameof(TCPClient));
 
-            SendRawMessage("PING");
+            SendRawMessage(SystemMessages.Ping);
             LogHeartbeat("PING sent to server");
         }
 
@@ -480,9 +481,9 @@ namespace work.ctrl3d
         private void ProcessMessage(string message)
         {
             // 시스템 메시지 처리
-            if (message.StartsWith("SYSTEM:"))
+            if (message.StartsWith(SystemMessages.SystemPrefix))
             {
-                var systemMessage = message[7..];
+                var systemMessage = message[SystemMessages.SystemPrefix.Length..];
                 LogSystem($"System message received: {systemMessage}");
                 OnSystemMessageReceived?.Invoke(systemMessage);
 
@@ -491,29 +492,29 @@ namespace work.ctrl3d
                 return;
             }
             
-            // Direct Message 처리
-            if (message.StartsWith("FROM:"))
+            // Relay Message 처리
+            if (message.StartsWith(SystemMessages.FromPrefix))
             {
                 var parts = message.Split(':', 3);
                 if (parts.Length == 3)
                 {
                     var senderName = parts[1];
-                    var directMessage = parts[2];
-                    LogMessage($"Direct message from {senderName}: {directMessage}");
-                    OnDirectMessageReceived?.Invoke(senderName, directMessage);
+                    var relayMessage = parts[2];
+                    LogMessage($"Relay message from {senderName}: {relayMessage}");
+                    OnRelayMessageReceived?.Invoke(senderName, relayMessage);
                     return;
                 }
             }
 
             // PONG 응답 처리
-            if (message.Equals("PONG", StringComparison.OrdinalIgnoreCase))
+            if (message.Equals(SystemMessages.Pong, StringComparison.OrdinalIgnoreCase))
             {
                 LogHeartbeat("Received PONG from server");
                 return;
             }
 
             // 브로드캐스트 메시지 처리
-            if (message.StartsWith("BROADCAST FROM "))
+            if (message.StartsWith(SystemMessages.BroadcastFromPrefix))
             {
                 LogMessage($"Broadcast message: {message}");
                 OnMessageReceived?.Invoke(message);
@@ -529,11 +530,11 @@ namespace work.ctrl3d
         {
             switch (systemMessage)
             {
-                case "REGISTER_NAME":
+                case SystemMessages.RegisterName:
                     // 서버가 이름 등록을 요청하면 자동으로 등록
                     if (!string.IsNullOrWhiteSpace(ClientName))
                     {
-                        SendRawMessage($"NAME:{ClientName}");
+                        SendRawMessage(SystemMessages.FormatNameMessage(ClientName));
                         LogSystem($"Auto-registering name: {ClientName}");
                     }
                     else
@@ -542,18 +543,18 @@ namespace work.ctrl3d
                     }
                     break;
 
-                case "NAME_REGISTERED":
+                case SystemMessages.NameRegistered:
                     _isNameRegistered = true;
                     LogSystem($"Name '{ClientName}' registered successfully!");
                     OnNameRegistered?.Invoke(ClientName);
                     break;
 
-                case "NAME_TAKEN":
+                case SystemMessages.NameTaken:
                     LogWarning($"Name '{ClientName}' is already taken!");
                     OnNameTaken?.Invoke();
                     break;
 
-                case "REGISTER_NAME_FIRST":
+                case SystemMessages.RegisterNameFirst:
                     LogWarning("Must register name before sending messages.");
                     break;
 
@@ -567,9 +568,9 @@ namespace work.ctrl3d
         private void ProcessSpecialSystemMessage(string systemMessage)
         {
             // 클라이언트 목록 응답 처리
-            if (systemMessage.StartsWith("CLIENT_LIST:"))
+            if (systemMessage.StartsWith(SystemMessages.ClientListPrefix))
             {
-                var clientListStr = systemMessage[12..];
+                var clientListStr = systemMessage[SystemMessages.ClientListPrefix.Length..];
                 var clientList = string.IsNullOrEmpty(clientListStr) ? Array.Empty<string>() : clientListStr.Split(',');
                 LogSystem($"Received client list: {string.Join(", ", clientList)}");
                 OnClientListReceived?.Invoke(clientList);
@@ -577,9 +578,9 @@ namespace work.ctrl3d
             }
 
             // 사용자 목록 응답 처리
-            if (systemMessage.StartsWith("USER_LIST:"))
+            if (systemMessage.StartsWith(SystemMessages.UserListPrefix))
             {
-                var userListStr = systemMessage[10..];
+                var userListStr = systemMessage[SystemMessages.UserListPrefix.Length..];
                 var userList = string.IsNullOrEmpty(userListStr) ? Array.Empty<string>() : userListStr.Split(',');
                 LogSystem($"Received user list: {string.Join(", ", userList)}");
                 OnClientListReceived?.Invoke(userList); // 같은 이벤트 사용
@@ -587,44 +588,44 @@ namespace work.ctrl3d
             }
 
             // 사용자를 찾을 수 없음
-            if (systemMessage.StartsWith("USER_NOT_FOUND:"))
+            if (systemMessage.StartsWith(SystemMessages.UserNotFoundPrefix))
             {
-                var notFoundUser = systemMessage[15..];
+                var notFoundUser = systemMessage[SystemMessages.UserNotFoundPrefix.Length..];
                 LogWarning($"User not found: {notFoundUser}");
                 return;
             }
 
             // 자신의 정보 응답
-            if (systemMessage.StartsWith("YOU_ARE:"))
+            if (systemMessage.StartsWith(SystemMessages.YouArePrefix))
             {
                 LogSystem($"Server info: {systemMessage}");
                 return;
             }
 
             // 서버 상태 응답
-            if (systemMessage.StartsWith("SERVER_STATUS:"))
+            if (systemMessage.StartsWith(SystemMessages.ServerStatusPrefix))
             {
                 LogSystem($"Server status: {systemMessage}");
                 return;
             }
 
             // 도움말 텍스트
-            if (systemMessage.StartsWith("HELP_TEXT:"))
+            if (systemMessage.StartsWith(SystemMessages.HelpTextPrefix))
             {
-                var helpText = systemMessage[10..];
+                var helpText = systemMessage[SystemMessages.HelpTextPrefix.Length..];
                 LogSystem($"Server help:\n{helpText}");
                 return;
             }
 
             // 킥 메시지 처리 (두 가지 형태 모두 지원)
-            if (systemMessage.StartsWith("KICKED"))
+            if (systemMessage.StartsWith(SystemMessages.Kicked))
             {
                 var reason = "Kicked by administrator";
                 
                 // KICKED:reason 형태인 경우 이유 추출
-                if (systemMessage.StartsWith("KICKED:") && systemMessage.Length > 7)
+                if (systemMessage.StartsWith(SystemMessages.KickedPrefix) && systemMessage.Length > SystemMessages.KickedPrefix.Length)
                 {
-                    reason = systemMessage[7..];
+                    reason = systemMessage[SystemMessages.KickedPrefix.Length..];
                 }
                 
                 LogWarning($"Kicked from server: {reason}");
@@ -634,25 +635,25 @@ namespace work.ctrl3d
             }
 
             // 기타 에러 메시지들
-            if (systemMessage == "INVALID_TARGET_USER")
+            if (systemMessage == SystemMessages.InvalidTargetUser)
             {
                 LogError("Invalid target user specified.");
                 return;
             }
 
-            if (systemMessage == "EMPTY_MESSAGE")
+            if (systemMessage == SystemMessages.EmptyMessage)
             {
                 LogError("Empty message cannot be sent.");
                 return;
             }
 
-            if (systemMessage == "INVALID_TO_FORMAT")
+            if (systemMessage == SystemMessages.InvalidToFormat)
             {
                 LogError("Invalid TO: message format.");
                 return;
             }
 
-            if (systemMessage == "EMPTY_BROADCAST_MESSAGE")
+            if (systemMessage == SystemMessages.EmptyBroadcastMessage)
             {
                 LogError("Empty broadcast message cannot be sent.");
                 return;
@@ -671,7 +672,7 @@ namespace work.ctrl3d
             OnNameRegistered = null;
             OnNameTaken = null;
             OnClientListReceived = null;
-            OnDirectMessageReceived = null;
+            OnRelayMessageReceived = null;
             OnConnectionFailed = null;
             OnKicked = null;
         }

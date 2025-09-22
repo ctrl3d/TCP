@@ -1,4 +1,3 @@
-
 using System;
 using System.Collections.Generic;
 using System.Net;
@@ -7,6 +6,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using work.ctrl3d.Logger;
+using work.ctrl3d.Constants;
 
 namespace work.ctrl3d
 {
@@ -394,7 +394,7 @@ namespace work.ctrl3d
             {
                 if (_clientsByName.TryGetValue(receiverName, out var receiver))
                 {
-                    var formattedMessage = $"FROM:{senderName}:{message}";
+                    var formattedMessage = SystemMessages.FormatFromMessage(senderName, message);
                     LogMessage($"{senderName}에서 {receiverName}으로 메시지 라우팅: {message}");
                     return receiver.SendData(formattedMessage);
                 }
@@ -402,7 +402,7 @@ namespace work.ctrl3d
                 // 받는 사람이 없으면 발신자에게 알림
                 if (_clientsByName.TryGetValue(senderName, out var sender))
                 {
-                    sender.SendData($"SYSTEM:USER_NOT_FOUND:{receiverName}");
+                    sender.SendData(SystemMessages.FormatSystemMessage(SystemMessages.FormatUserNotFoundMessage(receiverName)));
                 }
                 
                 LogWarning($"{senderName}이(가) 보낸 메시지를 위한 사용자 {receiverName}을(를) 찾을 수 없습니다.");
@@ -422,7 +422,7 @@ namespace work.ctrl3d
                 
                 if (sender != null && receiver != null)
                 {
-                    var formattedMessage = $"FROM:{sender.ClientName}:{message}";
+                    var formattedMessage = SystemMessages.FormatFromMessage(sender.ClientName, message);
                     LogMessage($"{sender.ClientName}에서 {receiver.ClientName}으로 메시지 라우팅: {message}");
                     return receiver.SendData(formattedMessage);
                 }
@@ -430,7 +430,7 @@ namespace work.ctrl3d
                 // 받는 사람이 없으면 발신자에게 알림
                 if (sender != null)
                 {
-                    sender.SendData($"SYSTEM:USER_NOT_FOUND:ID_{receiverId}");
+                    sender.SendData(SystemMessages.FormatSystemMessage(SystemMessages.FormatUserNotFoundMessage($"{SystemMessages.IDPrefix}{receiverId}")));
                 }
                 
                 LogWarning($"{senderId}가 보낸 메시지를 위한 사용자 ID {receiverId}를 찾을 수 없습니다.");
@@ -444,7 +444,7 @@ namespace work.ctrl3d
         public void SendUserListToClient(string clientName)
         {
             var userList = GetConnectedClientNames();
-            var userListMessage = "SYSTEM:USER_LIST:" + string.Join(",", userList);
+            var userListMessage = SystemMessages.FormatSystemMessage(SystemMessages.FormatUserListMessage(string.Join(",", userList)));
             
             lock (_clientsByName)
             {
@@ -466,7 +466,7 @@ namespace work.ctrl3d
         public void SendUserListToClient(int clientId)
         {
             var userList = GetConnectedClientNames();
-            var userListMessage = "SYSTEM:USER_LIST:" + string.Join(",", userList);
+            var userListMessage = SystemMessages.FormatSystemMessage(SystemMessages.FormatUserListMessage(string.Join(",", userList)));
             
             lock (_connections)
             {
@@ -489,7 +489,7 @@ namespace work.ctrl3d
         public void BroadcastUserList()
         {
             var userList = GetConnectedClientNames();
-            var userListMessage = "SYSTEM:USER_LIST:" + string.Join(",", userList);
+            var userListMessage = SystemMessages.FormatSystemMessage(SystemMessages.FormatUserListMessage(string.Join(",", userList)));
             
             LogSystem($"모든 클라이언트에게 사용자 목록 브로드캐스트: {userList.Length}명의 사용자");
             lock (_connections)
@@ -509,7 +509,7 @@ namespace work.ctrl3d
             LogMessage($"{clientName} ({clientId})로부터 메시지 처리 중: {message}");
 
             // TO: 명령어 처리 (다른 사용자에게 메시지 전송)
-            if (message.StartsWith("TO:"))
+            if (message.StartsWith(SystemMessages.ToPrefix))
             {
                 var parts = message.Split(':', 3);
                 if (parts.Length == 3)
@@ -522,31 +522,93 @@ namespace work.ctrl3d
             }
 
             // GET_USERS 명령어 처리 (사용자 목록 요청)
-            if (message.Equals("GET_USERS", StringComparison.OrdinalIgnoreCase))
+            if (message.Equals(SystemMessages.GetUsers, StringComparison.OrdinalIgnoreCase))
             {
                 SendUserListToClient(clientName);
                 return;
             }
 
             // BROADCAST: 명령어 처리
-            if (message.StartsWith("BROADCAST:"))
+            if (message.StartsWith(SystemMessages.BroadcastPrefix))
             {
-                var broadcastMessage = message[10..];
-                var formattedMessage = $"BROADCAST FROM {clientName}: {broadcastMessage}";
+                var broadcastMessage = message[SystemMessages.BroadcastPrefix.Length..];
+                var formattedMessage = SystemMessages.FormatBroadcastFromMessage(clientName, broadcastMessage);
                 BroadcastMessage(formattedMessage);
                 return;
             }
 
             // PING 명령어 처리
-            if (message.Equals("PING", StringComparison.OrdinalIgnoreCase))
+            if (message.Equals(SystemMessages.Ping, StringComparison.OrdinalIgnoreCase))
             {
                 LogHeartbeat($"{clientName} ({clientId})로부터 PING 받음");
-                SendMessageToClient(clientName, "PONG");
+                SendMessageToClient(clientName, SystemMessages.Pong);
                 return;
             }
 
             // 일반 메시지는 기존 이벤트로 처리
             OnMessageReceived?.Invoke(clientId, clientName, message);
+        }
+
+        #endregion
+
+        #region Client Management Methods
+
+        /// <summary>
+        /// 특정 클라이언트를 강제로 킥합니다 (이름으로)
+        /// </summary>
+        public bool KickClient(string clientName, string reason = "관리자에 의해 강제 퇴장되었습니다")
+        {
+            lock (_clientsByName)
+            {
+                if (_clientsByName.TryGetValue(clientName, out var client))
+                {
+                    LogSystem($"클라이언트 {clientName} 킥 처리: {reason}");
+                    client.Kick(reason);
+                    return true;
+                }
+                
+                LogWarning($"킥할 클라이언트 {clientName}을(를) 찾을 수 없습니다.");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// 특정 클라이언트를 강제로 킥합니다 (ID로)
+        /// </summary>
+        public bool KickClient(int clientId, string reason = "관리자에 의해 강제 퇴장되었습니다")
+        {
+            lock (_connections)
+            {
+                var client = _connections.FirstOrDefault(c => c.ClientId == clientId);
+                if (client != null)
+                {
+                    LogSystem($"클라이언트 ID {clientId} ({client.ClientName}) 킥 처리: {reason}");
+                    client.Kick(reason);
+                    return true;
+                }
+                
+                LogWarning($"킥할 클라이언트 ID {clientId}를 찾을 수 없습니다.");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// 모든 클라이언트를 킥합니다
+        /// </summary>
+        public void KickAllClients(string reason = "서버 종료로 인한 연결 해제")
+        {
+            List<ClientConnection> clientsToKick;
+            lock (_connections)
+            {
+                clientsToKick = _connections.ToList();
+            }
+
+            LogSystem($"모든 클라이언트 킥 처리: {clientsToKick.Count}명의 클라이언트");
+            
+            foreach (var client in clientsToKick)
+            {
+                client.Kick(reason);
+            }
         }
 
         #endregion
@@ -578,12 +640,67 @@ namespace work.ctrl3d
         }
 
         /// <summary>
+        /// 모든 클라이언트 연결 정보 반환 (등록된 이름 포함)
+        /// </summary>
+        public List<(int ClientId, string ClientName, bool IsNameRegistered, bool IsAlive, string EndPoint)> GetAllClientInfo()
+        {
+            lock (_connections)
+            {
+                return _connections
+                    .Select(c => (c.ClientId, c.ClientName, c.IsNameRegistered, c.IsAlive, c.GetClientEndPoint()))
+                    .ToList();
+            }
+        }
+
+        /// <summary>
         /// 클라이언트로부터 받은 메시지를 내부적으로 처리
         /// </summary>
         internal void OnMessageReceivedFromClient(int clientId, string clientName, string message)
         {
             // 메시지 처리 및 라우팅
             ProcessClientMessage(clientId, clientName, message);
+        }
+
+        #endregion
+
+        #region Server Commands
+
+        /// <summary>
+        /// 모든 클라이언트에게 서버 공지사항 전송
+        /// </summary>
+        public void SendServerAnnouncement(string announcement)
+        {
+            var formattedMessage = $"[서버 공지] {announcement}";
+            BroadcastMessage(formattedMessage);
+            LogSystem($"서버 공지사항 전송: {announcement}");
+        }
+
+        /// <summary>
+        /// 특정 클라이언트에게 서버 메시지 전송
+        /// </summary>
+        public bool SendServerMessage(string clientName, string message)
+        {
+            var formattedMessage = $"[서버 메시지] {message}";
+            var result = SendMessageToClient(clientName, formattedMessage);
+            if (result)
+                LogSystem($"{clientName}에게 서버 메시지 전송: {message}");
+            return result;
+        }
+
+        /// <summary>
+        /// 서버 통계 정보 반환
+        /// </summary>
+        public string GetServerStats()
+        {
+            lock (_connections)
+            {
+                var totalConnections = _connections.Count;
+                var registeredConnections = _connections.Count(c => c.IsNameRegistered);
+                var aliveConnections = _connections.Count(c => c.IsAlive);
+                
+                return $"서버 통계 - 총 연결: {totalConnections}, 등록된 클라이언트: {registeredConnections}, " +
+                       $"활성 연결: {aliveConnections}, 서버 주소: {_address}:{_port}";
+            }
         }
 
         #endregion
@@ -598,6 +715,10 @@ namespace work.ctrl3d
             if (_tcpListener == null) return;
 
             LogConnection("서버를 중지합니다...");
+            
+            // 모든 클라이언트에게 서버 종료 알림
+            KickAllClients("서버가 종료됩니다.");
+            
             _cancellationTokenSource?.Cancel();
             _tcpListener?.Stop();
 
@@ -629,7 +750,6 @@ namespace work.ctrl3d
             if (_tcpListener == null) return;
             
             ClearAllEvents();
-            
             Stop();
         }
 
@@ -664,6 +784,22 @@ namespace work.ctrl3d
             return $"LogSettings[Connection:{EnableConnectionLogs}, Message:{EnableMessageLogs}, " +
                    $"System:{EnableSystemLogs}, Error:{EnableErrorLogs}, Heartbeat:{EnableHeartbeatLogs}, " +
                    $"ClientState:{EnableClientStateLogs}]";
+        }
+
+        /// <summary>
+        /// 서버의 상세한 상태 정보를 반환
+        /// </summary>
+        public string GetDetailedStatusInfo()
+        {
+            var stats = GetServerStats();
+            var logSettings = GetLogSettings();
+            var uptime = IsRunning ? "실행 중" : "중지됨";
+            
+            return $"=== TCP 서버 상태 ===\n" +
+                   $"상태: {uptime}\n" +
+                   $"{stats}\n" +
+                   $"{logSettings}\n" +
+                   $"다음 정리 작업: 5초마다";
         }
 
         #endregion
