@@ -1,5 +1,23 @@
 {
   "address": "0.0.0.0",
   "port": 7777,
-  "logColor": "#FFFF00"
+  "logSettings": {
+    "enableLogging": true,
+    "logColor": "#FFFF00",
+    "logLevel": 4,
+    "logConnections": false,
+    "logMessages": false,
+    "logSystem": false,
+    "logErrors": false,
+    "logHeartbeat": false,
+    "logClientState": false,
+    "logReconnection": false
+  },
+  "serverSettings": {
+    "listenOnStart": true,
+    "maxClients": 100,
+    "connectionTimeout": 30,
+    "cleanupInterval": 5,
+    "kickDuplicateNames": true
+  }
 }

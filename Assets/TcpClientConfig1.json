@@ -1,6 +1,28 @@
 {
   "address": "127.0.0.1",
   "port": 7777,
-  "clientName": "test2",
-  "logColor": "#FFFFFF"
+  "clientName": "Client1",
+  "logSettings": {
+    "enableLogging": true,
+    "logColor": "#FFFFFF",
+    "logLevel": 4,
+    "logConnections": false,
+    "logMessages": false,
+    "logSystem": false,
+    "logErrors": false,
+    "logHeartbeat": false,
+    "logClientState": false,
+    "logReconnection": false
+  },
+  "connectionSettings": {
+    "connectOnStart": true,
+    "autoReconnect": true,
+    "reconnectOnStart": true,
+    "reconnectInterval": 5.0,
+    "maxReconnectAttempts": -1,
+    "reconnectBackoffMultiplier": 1.5,
+    "maxReconnectInterval": 60.0,
+    "enableHeartbeat": true,
+    "heartbeatInterval": 30.0
+  }
 }

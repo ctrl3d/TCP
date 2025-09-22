@@ -131,8 +131,40 @@ PrefabInstance:
     m_TransformParent: {fileID: 0}
     m_Modifications:
     - target: {fileID: 1973707474566696090, guid: 85d95b485f99cb84c8256b7967ef61ac, type: 3}
+      propertyPath: logErrors
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1973707474566696090, guid: 85d95b485f99cb84c8256b7967ef61ac, type: 3}
+      propertyPath: logSystem
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1973707474566696090, guid: 85d95b485f99cb84c8256b7967ef61ac, type: 3}
+      propertyPath: logMessages
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1973707474566696090, guid: 85d95b485f99cb84c8256b7967ef61ac, type: 3}
+      propertyPath: autoReconnect
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1973707474566696090, guid: 85d95b485f99cb84c8256b7967ef61ac, type: 3}
       propertyPath: configFileName
       value: TcpClientConfig1.json
+      objectReference: {fileID: 0}
+    - target: {fileID: 1973707474566696090, guid: 85d95b485f99cb84c8256b7967ef61ac, type: 3}
+      propertyPath: logConnections
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1973707474566696090, guid: 85d95b485f99cb84c8256b7967ef61ac, type: 3}
+      propertyPath: logReconnection
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1973707474566696090, guid: 85d95b485f99cb84c8256b7967ef61ac, type: 3}
+      propertyPath: reconnectOnStart
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1973707474566696090, guid: 85d95b485f99cb84c8256b7967ef61ac, type: 3}
+      propertyPath: heartbeatInterval
+      value: 30
       objectReference: {fileID: 0}
     - target: {fileID: 2131817207334125182, guid: 85d95b485f99cb84c8256b7967ef61ac, type: 3}
       propertyPath: m_LocalPosition.x
@@ -177,6 +209,10 @@ PrefabInstance:
     - target: {fileID: 3339299067910932635, guid: 85d95b485f99cb84c8256b7967ef61ac, type: 3}
       propertyPath: m_Name
       value: UnityTCPClient (1)
+      objectReference: {fileID: 0}
+    - target: {fileID: 3339299067910932635, guid: 85d95b485f99cb84c8256b7967ef61ac, type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -421,6 +457,18 @@ PrefabInstance:
       propertyPath: m_Name
       value: UnityTCPServer
       objectReference: {fileID: 0}
+    - target: {fileID: 817992460637338146, guid: 107d0c6ec81364740a305d0a03d60899, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6211037194084254949, guid: 107d0c6ec81364740a305d0a03d60899, type: 3}
+      propertyPath: logErrors
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6211037194084254949, guid: 107d0c6ec81364740a305d0a03d60899, type: 3}
+      propertyPath: logSystem
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 6211037194084254949, guid: 107d0c6ec81364740a305d0a03d60899, type: 3}
       propertyPath: logColor.b
       value: 0
@@ -428,6 +476,22 @@ PrefabInstance:
     - target: {fileID: 6211037194084254949, guid: 107d0c6ec81364740a305d0a03d60899, type: 3}
       propertyPath: logColor.r
       value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6211037194084254949, guid: 107d0c6ec81364740a305d0a03d60899, type: 3}
+      propertyPath: logMessages
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6211037194084254949, guid: 107d0c6ec81364740a305d0a03d60899, type: 3}
+      propertyPath: useJsonConfig
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6211037194084254949, guid: 107d0c6ec81364740a305d0a03d60899, type: 3}
+      propertyPath: logClientState
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6211037194084254949, guid: 107d0c6ec81364740a305d0a03d60899, type: 3}
+      propertyPath: logConnections
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -442,6 +506,42 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 1973707474566696090, guid: 85d95b485f99cb84c8256b7967ef61ac, type: 3}
+      propertyPath: logErrors
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1973707474566696090, guid: 85d95b485f99cb84c8256b7967ef61ac, type: 3}
+      propertyPath: logSystem
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1973707474566696090, guid: 85d95b485f99cb84c8256b7967ef61ac, type: 3}
+      propertyPath: logMessages
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1973707474566696090, guid: 85d95b485f99cb84c8256b7967ef61ac, type: 3}
+      propertyPath: autoReconnect
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1973707474566696090, guid: 85d95b485f99cb84c8256b7967ef61ac, type: 3}
+      propertyPath: enableLogging
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1973707474566696090, guid: 85d95b485f99cb84c8256b7967ef61ac, type: 3}
+      propertyPath: connectOnStart
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1973707474566696090, guid: 85d95b485f99cb84c8256b7967ef61ac, type: 3}
+      propertyPath: logConnections
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1973707474566696090, guid: 85d95b485f99cb84c8256b7967ef61ac, type: 3}
+      propertyPath: logReconnection
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1973707474566696090, guid: 85d95b485f99cb84c8256b7967ef61ac, type: 3}
+      propertyPath: reconnectOnStart
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 2131817207334125182, guid: 85d95b485f99cb84c8256b7967ef61ac, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
