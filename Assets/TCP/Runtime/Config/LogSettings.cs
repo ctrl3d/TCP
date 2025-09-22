@@ -1,3 +1,4 @@
+using System;
 using work.ctrl3d.Logger;
 
 namespace work.ctrl3d.Config
@@ -6,6 +7,7 @@ namespace work.ctrl3d.Config
     /// TCP 클라이언트와 서버에서 사용하는 로그 설정 클래스입니다.
     /// JSON 구성 파일에서 로드될 수 있으며, 다양한 로그 유형을 제어합니다.
     /// </summary>
+    [Serializable]
     public class LogSettings
     {
         // 기본 로그 설정
