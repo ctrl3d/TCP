@@ -13,7 +13,6 @@ namespace work.ctrl3d.Config
         // 기본 로그 설정
         public bool enableLogging = true;
         public string logColor = "#00FFFF";
-        public LogLevel logLevel = LogLevel.Info;
         
         // 로그 유형 설정
         public bool logConnections = false;   // 연결 관련 로그
@@ -30,8 +29,7 @@ namespace work.ctrl3d.Config
         /// </summary>
         public override string ToString()
         {
-            return $"LogSettings[Enabled:{enableLogging}, Level:{logLevel}, " +
-                   $"Connection:{logConnections}, Message:{logMessages}, " +
+            return $"Connection:{logConnections}, Message:{logMessages}, " +
                    $"System:{logSystem}, Error:{logErrors}, Heartbeat:{logHeartbeat}, " +
                    $"ClientState:{logClientState}, Reconnection:{logReconnection}]";
         }

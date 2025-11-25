@@ -14,6 +14,20 @@
       "dependencies": {},
       "hash": "95998ff3f2d8011da67c7b9ba0c75a57af5f6b26"
     },
+    "com.github-glitchenzo.nugetforunity": {
+      "version": "4.5.0",
+      "depth": 0,
+      "source": "registry",
+      "dependencies": {},
+      "url": "https://package.openupm.com"
+    },
+    "com.serilog.sinks.unity3d": {
+      "version": "3.0.0",
+      "depth": 0,
+      "source": "registry",
+      "dependencies": {},
+      "url": "https://package.openupm.com"
+    },
     "com.unity.collab-proxy": {
       "version": "2.8.2",
       "depth": 0,
@@ -30,7 +44,7 @@
     },
     "com.unity.ext.nunit": {
       "version": "1.0.6",
-      "depth": 2,
+      "depth": 1,
       "source": "registry",
       "dependencies": {},
       "url": "https://packages.unity.com"
@@ -50,8 +64,8 @@
       }
     },
     "com.unity.ide.rider": {
-      "version": "3.0.36",
-      "depth": 1,
+      "version": "3.0.38",
+      "depth": 0,
       "source": "registry",
       "dependencies": {
         "com.unity.ext.nunit": "1.0.6"
@@ -170,7 +184,7 @@
       "depth": 0,
       "source": "git",
       "dependencies": {},
-      "hash": "57362d1df4ba6d794ae233acdbefe952a93eda56"
+      "hash": "0642a610caca955f39e7ee017f9a3d31d9984bb4"
     },
     "com.unity.modules.ai": {
       "version": "1.0.0",

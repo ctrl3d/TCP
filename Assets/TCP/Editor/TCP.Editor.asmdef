@@ -1,7 +1,9 @@
 {
-    "name": "TCP.Editor",
+    "name": "Tcp.Editor",
     "rootNamespace": "work.ctrl3d",
-    "references": ["GUID:30edb851d30ff7f4793ce5f86e809d7a"],
+    "references": [
+        "GUID:30edb851d30ff7f4793ce5f86e809d7a"
+    ],
     "includePlatforms": [
         "Editor"
     ],

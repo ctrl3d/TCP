@@ -1,10 +1,5 @@
-﻿using System;
-using System.IO;
-using System.Linq;
-using UnityEditor;
-using UnityEditor.Build;
+﻿using UnityEditor;
 using UnityEditor.PackageManager;
-using UnityEngine;
 
 namespace work.ctrl3d.TCP
 {
@@ -13,65 +8,18 @@ namespace work.ctrl3d.TCP
     {
         private const string UnityExtensionsName = "work.ctrl3d.unity-extensions";
         private const string UnityExtensionsGitUrl = "https://github.com/ctrl3d/UnityExtensions.git?path=Assets/UnityExtensions";
-        
+    
         private const string JsonConfigName = "work.ctrl3d.json-config";
         private const string JsonConfigGitUrl = "https://github.com/ctrl3d/JsonConfig.git?path=Assets/JsonConfig";
-        
+    
         static PackageInstaller()
         {
-            var isUnityExtensionsInstalled = CheckPackageInstalled(UnityExtensionsName);
-            if (!isUnityExtensionsInstalled) AddGitPackage(UnityExtensionsName, UnityExtensionsGitUrl);
-            
-            var isJsonConfigInstalled = CheckPackageInstalled(JsonConfigName);
-            if (!isJsonConfigInstalled) AddGitPackage(JsonConfigName, JsonConfigGitUrl);
+            // Unity API를 사용하여 안전하게 패키지 설치 (비동기 요청)
+            // 이미 설치되어 있다면 Unity가 알아서 무시하거나 업데이트합니다.
+            Client.Add(UnityExtensionsGitUrl);
+            Client.Add(JsonConfigGitUrl);
         }
         
-        private static void AddGitPackage(string packageName, string gitUrl)
-        {
-            var path = Path.Combine(Application.dataPath, "../Packages/manifest.json");
-            var jsonString = File.ReadAllText(path);
-
-            var indexOfLastBracket = jsonString.IndexOf("}", StringComparison.Ordinal);
-            var dependenciesSubstring = jsonString[..indexOfLastBracket];
-            var endOfLastPackage = dependenciesSubstring.LastIndexOf("\"", StringComparison.Ordinal);
-
-            jsonString = jsonString.Insert(endOfLastPackage + 1, $", \n \"{packageName}\": \"{gitUrl}\"");
-
-            File.WriteAllText(path, jsonString);
-            Client.Resolve();
-        }
-
-        private static bool CheckPackageInstalled(string packageName)
-        {
-            var path = Path.Combine(Application.dataPath, "../Packages/manifest.json");
-            var jsonString = File.ReadAllText(path);
-            return jsonString.Contains(packageName);
-        }
-        
-        private static void AddScriptingDefineSymbol(string symbol)
-        {
-            var buildTarget = EditorUserBuildSettings.activeBuildTarget;
-            var targetGroup = BuildPipeline.GetBuildTargetGroup(buildTarget);
-            var namedBuildTarget = NamedBuildTarget.FromBuildTargetGroup(targetGroup);
-            
-            var symbols = PlayerSettings.GetScriptingDefineSymbols(namedBuildTarget);
-            if (!symbols.Contains(symbol))
-            {
-                symbols += $";{symbol}";
-            }
-            
-            PlayerSettings.SetScriptingDefineSymbols(namedBuildTarget, symbols);
-        }
-        
-        private static bool HasScriptingDefineSymbol(string symbol)
-        {
-            var buildTarget = EditorUserBuildSettings.activeBuildTarget;
-            var targetGroup = BuildPipeline.GetBuildTargetGroup(buildTarget);
-            var namedBuildTarget = NamedBuildTarget.FromBuildTargetGroup(targetGroup);
-            
-            var symbols = PlayerSettings.GetScriptingDefineSymbols(namedBuildTarget);
-            var symbolArray = symbols.Split(';');
-            return symbolArray.Any(existingSymbol => existingSymbol == symbol);
-        }
+        // 기존의 위험한 파일 조작 코드(AddGitPackage, CheckPackageInstalled 등)는 제거합니다.
     }
 }

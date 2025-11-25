@@ -1,5 +1,5 @@
 {
-    "name": "TCP",
+    "name": "Tcp",
     "rootNamespace": "work.ctrl3d",
     "references": [
         "GUID:48f782738794458695a663940b5314f4",

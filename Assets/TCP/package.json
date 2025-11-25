@@ -1,12 +1,12 @@
 ﻿{
   "name": "work.ctrl3d.tcp",
   "version": "0.1.0",
-  "displayName": "TCP",
+  "displayName": "Tcp",
   "description": "",
   "unity": "2022.1",
-  "documentationUrl": "https://ctrl3d.github.io/TCP",
-  "changelogUrl": "https://github.com/ctrl3d/TCP/blob/main/CHANGELOG.md",
-  "licensesUrl": "https://github.com/ctrl3d/TCP/blob/main/LICENSE",
+  "documentationUrl": "https://ctrl3d.github.io/Tcp",
+  "changelogUrl": "https://github.com/ctrl3d/Tcp/blob/main/CHANGELOG.md",
+  "licensesUrl": "https://github.com/ctrl3d/Tcp/blob/main/LICENSE",
   "dependencies": {
   },
   "keywords": [
