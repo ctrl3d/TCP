@@ -8,6 +8,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using work.ctrl3d.Logger;
 
+#if USE_UNITASK
+using Cysharp.Threading.Tasks;
+#endif
+
 namespace work.ctrl3d
 {
     public class TcpServer : IDisposable
@@ -45,8 +49,11 @@ namespace work.ctrl3d
                 _tcpListener.Start();
                 _logger.Log(LogFilter.System, $"서버 시작됨 (Port: {_port})");
                 
-                // [Review Fix] async Task 실행을 명시적으로 처리 (Fire and forget)
+#if USE_UNITASK
+                AcceptConnectionsAsync(_cts.Token).Forget();
+#else
                 _ = AcceptConnectionsAsync(_cts.Token);
+#endif
             }
             catch (Exception e)
             {
@@ -55,13 +62,21 @@ namespace work.ctrl3d
         }
 
         // [Review Fix] async void -> async Task
+#if USE_UNITASK
+        private async UniTaskVoid AcceptConnectionsAsync(CancellationToken token)
+#else
         private async Task AcceptConnectionsAsync(CancellationToken token)
+#endif
         {
             while (!token.IsCancellationRequested)
             {
                 try
                 {
+#if USE_UNITASK
+                    var tcpClient = await _tcpListener.AcceptTcpClientAsync().AsUniTask();
+#else
                     var tcpClient = await _tcpListener.AcceptTcpClientAsync().ConfigureAwait(false);
+#endif
                     var clientId = _nextClientId++;
             
                     var session = new ClientSession(clientId, tcpClient, this, _logger);
@@ -69,7 +84,11 @@ namespace work.ctrl3d
             
                     _logger.Log(LogFilter.Connection, $"클라이언트 접속: ID {clientId}");
             
+#if USE_UNITASK
+                    session.StartReceivingAsync(token).Forget();
+#else
                     _ = Task.Run(() => session.StartReceivingAsync(token), token);
+#endif
                 }
                 catch (ObjectDisposedException) { break; }
                 catch (Exception e)
@@ -90,19 +109,18 @@ namespace work.ctrl3d
                 return;
             }
 
-            var parts = message.Split(new[] { TcpProtocol.CmdSeparator }, 3);
-            var command = parts[0];
+            var (command, args) = TcpProtocol.Unpack(message);
 
             switch (command)
             {
                 case TcpProtocol.CmdTo:
-                    if (parts.Length >= 3)
-                        HandlePrivateMessage(clientName, targetName: parts[1], content: parts[2]);
+                    if (args.Length >= 2)
+                        HandlePrivateMessage(clientName, targetName: args[0], content: args[1]);
                     break;
 
                 case TcpProtocol.CmdBroadcast:
-                    var broadcastMsg = message.Substring(TcpProtocol.CmdBroadcast.Length + 1);
-                    Broadcast(TcpProtocol.Pack("FROM", clientName, broadcastMsg));
+                    if (args.Length >= 1)
+                        Broadcast(TcpProtocol.Pack(TcpProtocol.FromPrefix, clientName, args[0]));
                     break;
 
                 case TcpProtocol.CmdGetUsers:
@@ -208,7 +226,20 @@ namespace work.ctrl3d
             _logger = logger;
         }
 
-        public async void Send(string message)
+        public void Send(string message)
+        {
+#if USE_UNITASK
+            SendAsync(message).Forget();
+#else
+            _ = SendAsync(message);
+#endif
+        }
+
+#if USE_UNITASK
+        public async UniTask SendAsync(string message)
+#else
+        public async Task SendAsync(string message)
+#endif
         {
             try
             {
@@ -219,7 +250,11 @@ namespace work.ctrl3d
                 {
                     if (_stream != null && _stream.CanWrite)
                     {
+#if USE_UNITASK
+                        await _stream.WriteAsync(packet, 0, packet.Length).AsUniTask();
+#else
                         await _stream.WriteAsync(packet, 0, packet.Length);
+#endif
                     }
                 }
                 finally
@@ -234,7 +269,11 @@ namespace work.ctrl3d
             }
         }
 
+#if USE_UNITASK
+        public async UniTaskVoid StartReceivingAsync(CancellationToken token)
+#else
         public async Task StartReceivingAsync(CancellationToken token)
+#endif
         {
             var headerBuffer = new byte[4]; 
 
@@ -245,7 +284,7 @@ namespace work.ctrl3d
                     var bytesRead = await ReadExactAsync(headerBuffer, 4, token);
                     if (bytesRead == 0) break; 
 
-                    var bodyLength = BitConverter.ToInt32(headerBuffer, 0);
+                    var bodyLength = TcpProtocol.DecodeInt32BE(headerBuffer, 0);
             
                     if (bodyLength is < 0 or > TcpProtocol.MaxPacketSize)
                     {
@@ -263,22 +302,19 @@ namespace work.ctrl3d
             
                         if (string.IsNullOrEmpty(ClientName)) 
                         {
-                            if (message.StartsWith("CONNECT:"))
+                            var (command, args) = TcpProtocol.Unpack(message);
+                            if (command == TcpProtocol.CmdConnect && args.Length > 0)
                             {
-                                var parts = message.Split(TcpProtocol.CmdSeparator);
-                                if (parts.Length > 1)
+                                var requestedName = args[0];
+                                if (_server.RegisterClientName(ClientId, requestedName))
                                 {
-                                    var requestedName = parts[1];
-                                    if (_server.RegisterClientName(ClientId, requestedName))
-                                    {
-                                        ClientName = requestedName;
-                                    }
-                                    else
-                                    {
-                                        Send($"{TcpProtocol.SystemNameTaken}");
-                                        _logger.LogWarning(LogFilter.Error, $"Client ID {ClientId} tried to take existing name: {requestedName}");
-                                        break; 
-                                    }
+                                    ClientName = requestedName;
+                                }
+                                else
+                                {
+                                    Send(TcpProtocol.SystemNameTaken);
+                                    _logger.LogWarning(LogFilter.Error, $"Client ID {ClientId} tried to take existing name: {requestedName}");
+                                    break; 
                                 }
                             }
                         }
@@ -304,12 +340,20 @@ namespace work.ctrl3d
             }
         }
 
+#if USE_UNITASK
+        private async UniTask<int> ReadExactAsync(byte[] buffer, int count, CancellationToken token)
+#else
         private async Task<int> ReadExactAsync(byte[] buffer, int count, CancellationToken token)
+#endif
         {
             var offset = 0;
             while (offset < count)
             {
+#if USE_UNITASK
+                var read = await _stream.ReadAsync(buffer, offset, count - offset, token).AsUniTask();
+#else
                 var read = await _stream.ReadAsync(buffer, offset, count - offset, token);
+#endif
                 if (read == 0) return 0; 
                 offset += read;
             }

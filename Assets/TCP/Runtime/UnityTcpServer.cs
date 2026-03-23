@@ -3,10 +3,13 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using Alchemy.Inspector;
 using UnityEngine;
 using work.ctrl3d.Config;
 using work.ctrl3d.Logger;
+
+#if USE_UNITASK
+using Cysharp.Threading.Tasks;
+#endif
 
 namespace work.ctrl3d
 {
@@ -33,13 +36,28 @@ namespace work.ctrl3d
     
         private TcpLogger _activeLogger;
     
-        // [Review Fix] UnityEvent 제거, 순수 C# 이벤트 사용
         public event Action<int, string> OnClientConnected;
         public event Action<int, string, string> OnMessageReceived;
         public event Action<int, string> OnClientDisconnected;
 
         private TcpServer _server;
-        private readonly ConcurrentQueue<Action> _mainThreadActions = new();
+        
+        private enum ServerEventType
+        {
+            ClientConnected,
+            ClientDisconnected,
+            MessageReceived
+        }
+
+        private struct ServerEventData
+        {
+            public ServerEventType Type;
+            public int ClientId;
+            public string ClientName;
+            public string Message;
+        }
+
+        private readonly ConcurrentQueue<ServerEventData> _eventQueue = new();
         private readonly Dictionary<int, string> _clientMap = new();
 
         public bool IsRunning => _server?.IsRunning ?? false;
@@ -86,10 +104,37 @@ namespace work.ctrl3d
 
         private void Update()
         {
-            while (_mainThreadActions.TryDequeue(out var action))
+            while (_eventQueue.TryDequeue(out var ev))
             {
-                action.Invoke();
+                switch (ev.Type)
+                {
+                    case ServerEventType.ClientConnected:
+                        _clientMap[ev.ClientId] = ev.ClientName;
+                        _activeLogger?.Log(LogFilter.Connection, $"클라이언트 연결됨. ID: {ev.ClientId}, 이름: {ev.ClientName}");
+                        OnClientConnected?.Invoke(ev.ClientId, ev.ClientName);
+                        _server?.SendToClient(ev.ClientId, $"Welcome to the server, {ev.ClientName}!");
+                        BroadcastUserList();
+                        _connectedClientNames = _clientMap.Values.ToArray();
+                        break;
+
+                    case ServerEventType.ClientDisconnected:
+                        if (_clientMap.ContainsKey(ev.ClientId))
+                            _clientMap.Remove(ev.ClientId);
+                        _activeLogger?.LogWarning(LogFilter.Connection, $"클라이언트 연결 해제됨. ID: {ev.ClientId}, 이름: {ev.ClientName}");
+                        OnClientDisconnected?.Invoke(ev.ClientId, ev.ClientName);
+                        BroadcastUserList();
+                        _connectedClientNames = _clientMap.Values.ToArray();
+                        break;
+
+                    case ServerEventType.MessageReceived:
+                        _activeLogger?.Log(LogFilter.Message, $"메시지 수신 (ID: {ev.ClientId}, 이름: {ev.ClientName}): {ev.Message}");
+                        OnMessageReceived?.Invoke(ev.ClientId, ev.ClientName, ev.Message);
+                        break;
+                }
             }
+
+            _isRunning = IsRunning;
+            _connectedClientsCount = ConnectedClientsCount;
         }
 
         private void OnDestroy()
@@ -101,7 +146,6 @@ namespace work.ctrl3d
 
         #region Log Settings
 
-        [Button, Group("Logging Controls")]
         public void EnableAllLogs()
         {
             if (_activeLogger != null) _activeLogger.Filter = LogFilter.All;
@@ -109,7 +153,6 @@ namespace work.ctrl3d
             Log("모든 로그가 활성화되었습니다.");
         }
 
-        [Button, Group("Logging Controls")]
         public void DisableAllLogs()
         {
             if (_activeLogger != null) _activeLogger.Filter = LogFilter.None;
@@ -117,7 +160,6 @@ namespace work.ctrl3d
             Log("모든 로그가 비활성화되었습니다.");
         }
 
-        [Button, Group("Logging Controls")]
         public void EnableErrorLogsOnly()
         {
             if (_activeLogger != null) _activeLogger.Filter = LogFilter.Error;
@@ -129,26 +171,22 @@ namespace work.ctrl3d
 
         #region Public Methods
 
-        [Button, HorizontalGroup("Server Controls")]
         public void StartServer()
         {
             _server?.Start();
         }
 
-        [Button, HorizontalGroup("Server Controls")]
         public void StopServer()
         {
             _server?.Stop();
             _clientMap.Clear();
         }
 
-        [Button, Group("Message Controls")]
         public void SendToClientById(int clientId, string message)
         {
             _server?.SendToClient(clientId, message);
         }
 
-        [Button, Group("Message Controls")]
         public void SendToClientByName(string clientName, string message)
         {
             var target = _clientMap.FirstOrDefault(x => x.Value == clientName);
@@ -162,16 +200,13 @@ namespace work.ctrl3d
             }
         }
 
-        [Button, Group("Message Controls")]
         public void Broadcast(string message) => _server?.Broadcast(message);
 
-        [Button, Group("Client-to-Client Messages")]
         public void SendBetweenClients(string senderName, string receiverName, string message)
         {
             SendToClientByName(receiverName, $"{TcpProtocol.CmdTo}:{senderName}:{message}");
         }
 
-        [Button, Group("Client-to-Client Messages")]
         public void SendBetweenClientsById(int senderId, int receiverId, string message)
         {
             if (_clientMap.TryGetValue(senderId, out var senderName))
@@ -180,35 +215,30 @@ namespace work.ctrl3d
             }
         }
 
-        [Button, Group("User List Management")]
         public void SendUserListToClient(string clientName)
         {
             var userListStr = string.Join(",", _clientMap.Values);
             SendToClientByName(clientName, $"{TcpProtocol.SystemUserList}:{userListStr}");
         }
 
-        [Button, Group("User List Management")]
         public void SendUserListToClientById(int clientId)
         {
             var userListStr = string.Join(",", _clientMap.Values);
             _server?.SendToClient(clientId, $"{TcpProtocol.SystemUserList}:{userListStr}");
         }
 
-        [Button, Group("User List Management")]
         public void BroadcastUserList()
         {
             var userListStr = string.Join(",", _clientMap.Values);
             _server?.Broadcast($"{TcpProtocol.SystemUserList}:{userListStr}");
         }
 
-        [Button, Group("Information")]
         public void GetConnectedUsers()
         {
             var users = _clientMap.Values.ToArray();
             Log(users.Length > 0 ? $"연결된 사용자: {string.Join(", ", users)}" : "연결된 사용자 없음");
         }
 
-        [Button, Group("Information")]
         public void GetClientInfo()
         {
             if (_clientMap.Count > 0)
@@ -225,7 +255,6 @@ namespace work.ctrl3d
             }
         }
 
-        [Button, HorizontalGroup("Maintenance")]
         public void CleanupConnections() 
         {
             Log("CleanUp은 TcpServer 내부에서 자동으로 처리됩니다.");
@@ -246,7 +275,6 @@ namespace work.ctrl3d
             return _clientMap.ContainsValue(clientName);
         }
 
-        [Button, Group("Admin Controls")]
         public void KickClient(string clientName)
         {
             if (IsClientOnline(clientName))
@@ -260,7 +288,6 @@ namespace work.ctrl3d
             }
         }
 
-        [Button, Group("Information")]
         public void ShowServerStatus()
         {
             var status = IsRunning ? "Running" : "Stopped";
@@ -278,35 +305,32 @@ namespace work.ctrl3d
 
         private void HandleClientConnected(int clientId, string clientName)
         {
-            _mainThreadActions.Enqueue(() =>
+            _eventQueue.Enqueue(new ServerEventData
             {
-                _clientMap[clientId] = clientName;
-                _activeLogger?.Log(LogFilter.Connection, $"클라이언트 연결됨. ID: {clientId}, 이름: {clientName}");
-                OnClientConnected?.Invoke(clientId, clientName);
-                _server?.SendToClient(clientId, $"Welcome to the server, {clientName}!");
-                BroadcastUserList();
+                Type = ServerEventType.ClientConnected,
+                ClientId = clientId,
+                ClientName = clientName
             });
         }
 
         private void HandleClientDisconnected(int clientId, string clientName)
         {
-            _mainThreadActions.Enqueue(() => 
+            _eventQueue.Enqueue(new ServerEventData
             {
-                if (_clientMap.ContainsKey(clientId))
-                    _clientMap.Remove(clientId);
-
-                _activeLogger?.LogWarning(LogFilter.Connection, $"클라이언트 연결 해제됨. ID: {clientId}, 이름: {clientName}");
-                OnClientDisconnected?.Invoke(clientId, clientName);
-                BroadcastUserList();
+                Type = ServerEventType.ClientDisconnected,
+                ClientId = clientId,
+                ClientName = clientName
             });
         }
 
         private void HandleMessageReceived(int clientId, string clientName, string message)
         {
-            _mainThreadActions.Enqueue(() =>
+            _eventQueue.Enqueue(new ServerEventData
             {
-                _activeLogger?.Log(LogFilter.Message, $"메시지 수신 (ID: {clientId}, 이름: {clientName}): {message}");
-                OnMessageReceived?.Invoke(clientId, clientName, message);
+                Type = ServerEventType.MessageReceived,
+                ClientId = clientId,
+                ClientName = clientName,
+                Message = message
             });
         }
 
@@ -324,49 +348,14 @@ namespace work.ctrl3d
             _activeLogger?.LogWarning(LogFilter.System, message);
         }
 
-        public bool SendClientToClientMessage(string fromClient, string toClient, string message)
-        {
-            if (_server == null || !IsRunning) return false;
-            SendBetweenClients(fromClient, toClient, message);
-            return true;
-        }
-
-        public void SendBroadcastMessage(string message)
-        {
-            if (_server == null || !IsRunning) return;
-            _server.Broadcast(message);
-        }
-
-        public string[] GetConnectedClientNamesList()
-        {
-            return _clientMap.Values.ToArray();
-        }
-
-        public bool CheckClientOnlineStatus(string clientName)
-        {
-            return IsClientOnline(clientName);
-        }
-
-        public string GetServerStatusInfo()
-        {
-            return $"Running: {IsRunning}, Clients: {ConnectedClientsCount}";
-        }
-
         #endregion
 
         #region Inspector Debug Info
 
         [Header("Debug Info")] 
-        [SerializeField, ReadOnly] private bool _isRunning;
-        [SerializeField, ReadOnly] private int _connectedClientsCount;
-        [SerializeField, ReadOnly] private string[] _connectedClientNames = Array.Empty<string>();
-
-        private void LateUpdate()
-        {
-            _isRunning = IsRunning;
-            _connectedClientsCount = ConnectedClientsCount;
-            _connectedClientNames = _clientMap.Values.ToArray();
-        }
+        [SerializeField] private bool _isRunning;
+        [SerializeField] private int _connectedClientsCount;
+        [SerializeField] private string[] _connectedClientNames = Array.Empty<string>();
 
         #endregion
     }

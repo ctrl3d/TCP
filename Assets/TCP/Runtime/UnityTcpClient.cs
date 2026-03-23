@@ -1,12 +1,13 @@
-﻿
-using UnityEngine;
+﻿using System;
 using System.Collections.Concurrent;
-using System;
 using System.IO;
-using System.Collections;
-using Alchemy.Inspector;
+using System.Threading;
+using UnityEngine;
 using work.ctrl3d.Config;
 using work.ctrl3d.Logger;
+#if USE_UNITASK
+using Cysharp.Threading.Tasks;
+#endif
 
 namespace work.ctrl3d
 {
@@ -45,7 +46,6 @@ namespace work.ctrl3d
         [SerializeField] private bool enableHeartbeat = true;
         [SerializeField] private float heartbeatInterval = 30f; 
 
-        // [Review Fix] UnityEvent 제거, 순수 C# 이벤트 사용
         public event Action OnConnected;
         public event Action<string> OnMessageReceived;
         public event Action<string> OnSystemMessageReceived;
@@ -61,7 +61,30 @@ namespace work.ctrl3d
         public event Action<string> OnKicked; 
 
         private TcpClient _tcpClient;
-        private readonly ConcurrentQueue<Action> _mainThreadActions = new();
+        
+        private enum ClientEventType
+        {
+            Connected,
+            Disconnected,
+            MessageReceived,
+            SystemMessageReceived,
+            NameRegistered,
+            NameTaken,
+            DirectMessageReceived,
+            ClientListReceived,
+            ConnectionFailed,
+            Kicked
+        }
+
+        private struct ClientEventData
+        {
+            public ClientEventType Type;
+            public string StringArg1;
+            public string StringArg2;
+            public string[] ArrayArg;
+        }
+
+        private readonly ConcurrentQueue<ClientEventData> _eventQueue = new();
 
         private bool _isReconnecting;
         private int _reconnectAttempts;
@@ -69,7 +92,11 @@ namespace work.ctrl3d
         private float _reconnectTimer;
         private bool _wasConnectedBefore;
         private bool _shouldReconnect;
+#if USE_UNITASK
+        private CancellationTokenSource _reconnectCts;
+#else
         private Coroutine _reconnectCoroutine;
+#endif
         private float _lastHeartbeatTime;
 
         public bool IsConnected => _tcpClient is { IsConnected: true };
@@ -138,9 +165,62 @@ namespace work.ctrl3d
 
         private void Update()
         {
-            while (_mainThreadActions.TryDequeue(out var action))
+            while (_eventQueue.TryDequeue(out var ev))
             {
-                action.Invoke();
+                switch (ev.Type)
+                {
+                    case ClientEventType.Connected:
+                        _activeLogger?.Log(LogFilter.Connection, $"{address}:{port}에 연결되었습니다.");
+                        if (_isReconnecting)
+                        {
+                            _activeLogger?.Log(LogFilter.Connection, "재연결 성공!");
+                            StopReconnection();
+                            OnReconnectSuccess?.Invoke();
+                        }
+                        _wasConnectedBefore = true;
+                        _lastHeartbeatTime = Time.time;
+                        OnConnected?.Invoke();
+                        break;
+                    case ClientEventType.Disconnected:
+                        _activeLogger?.LogWarning(LogFilter.Connection, "서버와의 연결이 끊어졌습니다.");
+                        OnDisconnected?.Invoke();
+                        if (_wasConnectedBefore && _shouldReconnect && !_isReconnecting)
+                            StartReconnection();
+                        break;
+                    case ClientEventType.MessageReceived:
+                        _activeLogger?.Log(LogFilter.Message, $"메시지: {ev.StringArg1}");
+                        OnMessageReceived?.Invoke(ev.StringArg1);
+                        break;
+                    case ClientEventType.SystemMessageReceived:
+                        _activeLogger?.Log(LogFilter.System, $"시스템: {ev.StringArg1}");
+                        OnSystemMessageReceived?.Invoke(ev.StringArg1);
+                        break;
+                    case ClientEventType.NameRegistered:
+                        _activeLogger?.Log(LogFilter.System, $"이름 등록됨: {ev.StringArg1}");
+                        OnNameRegistered?.Invoke(ev.StringArg1);
+                        break;
+                    case ClientEventType.NameTaken:
+                        _activeLogger?.LogWarning(LogFilter.Error, "이름이 이미 사용 중입니다.");
+                        OnNameTaken?.Invoke();
+                        break;
+                    case ClientEventType.DirectMessageReceived:
+                        _activeLogger?.Log(LogFilter.Message, $"귓속말 ({ev.StringArg1}): {ev.StringArg2}");
+                        OnDirectMessageReceived?.Invoke(ev.StringArg1, ev.StringArg2);
+                        break;
+                    case ClientEventType.ClientListReceived:
+                        _activeLogger?.Log(LogFilter.System, $"사용자 목록: {string.Join(", ", ev.ArrayArg)}");
+                        OnClientListReceived?.Invoke(ev.ArrayArg);
+                        break;
+                    case ClientEventType.ConnectionFailed:
+                        _activeLogger?.LogError(LogFilter.Error, $"연결 실패: {ev.StringArg1}");
+                        OnConnectionFailed?.Invoke(ev.StringArg1);
+                        if (_shouldReconnect && !_isReconnecting) StartReconnection();
+                        break;
+                    case ClientEventType.Kicked:
+                        _activeLogger?.LogWarning(LogFilter.System, $"강제 퇴장: {ev.StringArg1}");
+                        OnKicked?.Invoke(ev.StringArg1);
+                        break;
+                }
             }
 
             HandleReconnection();
@@ -201,10 +281,30 @@ namespace work.ctrl3d
             _isReconnecting = true;
             _reconnectTimer = 0.1f;
 
+#if USE_UNITASK
+            _reconnectCts?.Cancel();
+            _reconnectCts?.Dispose();
+            _reconnectCts = new CancellationTokenSource();
+            ReconnectionTaskAsync(_reconnectCts.Token).Forget();
+#else
             if (_reconnectCoroutine != null) StopCoroutine(_reconnectCoroutine);
             _reconnectCoroutine = StartCoroutine(ReconnectionCoroutine());
+#endif
         }
 
+#if USE_UNITASK
+        private async UniTaskVoid ReconnectionTaskAsync(CancellationToken token)
+        {
+            while (_isReconnecting && _shouldReconnect)
+            {
+                bool canceled = await UniTask.Delay(TimeSpan.FromSeconds(_currentReconnectInterval), cancellationToken: token).SuppressCancellationThrow();
+                if (canceled || !_isReconnecting || !_shouldReconnect || IsConnected)
+                    break;
+
+                AttemptReconnect();
+            }
+        }
+#else
         private IEnumerator ReconnectionCoroutine()
         {
             while (_isReconnecting && _shouldReconnect)
@@ -217,6 +317,7 @@ namespace work.ctrl3d
                 AttemptReconnect();
             }
         }
+#endif
 
         private void AttemptReconnect()
         {
@@ -234,8 +335,11 @@ namespace work.ctrl3d
             OnReconnectAttempt?.Invoke(_reconnectAttempts);
 
             RecreateClient();
-            // [Review Fix] ConnectToServerAsync() 호출 (async Task지만 예외는 내부에서 처리됨)
-            _ = _tcpClient?.ConnectToServerAsync(); 
+#if USE_UNITASK
+            _tcpClient?.ConnectToServerAsync().Forget();
+#else
+            _ = _tcpClient?.ConnectToServerAsync();
+#endif
 
             _currentReconnectInterval = Mathf.Min(_currentReconnectInterval * reconnectBackoffMultiplier, maxReconnectInterval);
         }
@@ -246,11 +350,20 @@ namespace work.ctrl3d
             _reconnectAttempts = 0;
             _currentReconnectInterval = reconnectInterval;
 
+#if USE_UNITASK
+            if (_reconnectCts != null)
+            {
+                _reconnectCts.Cancel();
+                _reconnectCts.Dispose();
+                _reconnectCts = null;
+            }
+#else
             if (_reconnectCoroutine != null)
             {
                 StopCoroutine(_reconnectCoroutine);
                 _reconnectCoroutine = null;
             }
+#endif
         }
 
         #endregion
@@ -272,16 +385,17 @@ namespace work.ctrl3d
 
         #region Public Methods (Control)
 
-        [Button, HorizontalGroup("Network")]
         public void Connect()
         {
             _shouldReconnect = autoReconnect;
             StopReconnection();
-            // [Review Fix] Async 호출 대응
+#if USE_UNITASK
+            _tcpClient?.ConnectToServerAsync().Forget();
+#else
             _ = _tcpClient?.ConnectToServerAsync();
+#endif
         }
 
-        [Button, HorizontalGroup("Network")]
         public void Disconnect()
         {
             _shouldReconnect = false;
@@ -289,19 +403,14 @@ namespace work.ctrl3d
             _tcpClient?.Disconnect();
         }
 
-        [Button, Group("Messaging")]
         public void Send(string message) => _tcpClient?.Send(message);
 
-        [Button, Group("Messaging")]
         public void SendToClient(string targetName, string message) => _tcpClient?.SendToClient(targetName, message);
 
-        [Button, Group("Messaging")]
         public void Broadcast(string message) => _tcpClient?.Broadcast(message);
 
-        [Button, Group("Information")]
         public void RequestUserList() => _tcpClient?.RequestUserList();
 
-        [Button, Group("Connection Test")]
         public void Ping() => _tcpClient?.Ping();
 
         #endregion
@@ -310,97 +419,52 @@ namespace work.ctrl3d
 
         private void HandleConnected()
         {
-            _mainThreadActions.Enqueue(() =>
-            {
-                _activeLogger?.Log(LogFilter.Connection, $"{address}:{port}에 연결되었습니다.");
-                if (_isReconnecting)
-                {
-                    _activeLogger?.Log(LogFilter.Connection, "재연결 성공!");
-                    StopReconnection();
-                    OnReconnectSuccess?.Invoke();
-                }
-                _wasConnectedBefore = true;
-                _lastHeartbeatTime = Time.time;
-                OnConnected?.Invoke();
-            });
+            _eventQueue.Enqueue(new ClientEventData { Type = ClientEventType.Connected });
         }
 
         private void HandleDisconnected()
         {
-            _mainThreadActions.Enqueue(() =>
-            {
-                _activeLogger?.LogWarning(LogFilter.Connection, "서버와의 연결이 끊어졌습니다.");
-                OnDisconnected?.Invoke();
-                if (_wasConnectedBefore && _shouldReconnect && !_isReconnecting)
-                {
-                    StartReconnection();
-                }
-            });
+            _eventQueue.Enqueue(new ClientEventData { Type = ClientEventType.Disconnected });
         }
 
         private void HandleMessageReceived(string message)
         {
-            _mainThreadActions.Enqueue(() => {
-                _activeLogger?.Log(LogFilter.Message, $"메시지: {message}");
-                OnMessageReceived?.Invoke(message);
-            });
+            _eventQueue.Enqueue(new ClientEventData { Type = ClientEventType.MessageReceived, StringArg1 = message });
         }
 
         private void HandleSystemMessageReceived(string msg)
         {
-            _mainThreadActions.Enqueue(() => {
-                _activeLogger?.Log(LogFilter.System, $"시스템: {msg}");
-                OnSystemMessageReceived?.Invoke(msg);
-            });
+            _eventQueue.Enqueue(new ClientEventData { Type = ClientEventType.SystemMessageReceived, StringArg1 = msg });
         }
 
         private void HandleNameRegistered(string name)
         {
-            _mainThreadActions.Enqueue(() => {
-                _activeLogger?.Log(LogFilter.System, $"이름 등록됨: {name}");
-                OnNameRegistered?.Invoke(name);
-            });
+            _eventQueue.Enqueue(new ClientEventData { Type = ClientEventType.NameRegistered, StringArg1 = name });
         }
 
         private void HandleNameTaken()
         {
-            _mainThreadActions.Enqueue(() => {
-                _activeLogger?.LogWarning(LogFilter.Error, "이름이 이미 사용 중입니다.");
-                OnNameTaken?.Invoke();
-            });
+            _eventQueue.Enqueue(new ClientEventData { Type = ClientEventType.NameTaken });
         }
 
         private void HandleDirectMessageReceived(string sender, string msg)
         {
-            _mainThreadActions.Enqueue(() => {
-                _activeLogger?.Log(LogFilter.Message, $"귓속말 ({sender}): {msg}");
-                OnDirectMessageReceived?.Invoke(sender, msg);
-            });
+            _eventQueue.Enqueue(new ClientEventData { Type = ClientEventType.DirectMessageReceived, StringArg1 = sender, StringArg2 = msg });
         }
 
         private void HandleClientListReceived(string[] users)
         {
-            _mainThreadActions.Enqueue(() => {
-                _activeLogger?.Log(LogFilter.System, $"사용자 목록: {string.Join(", ", users)}");
-                OnClientListReceived?.Invoke(users);
-            });
+            _eventQueue.Enqueue(new ClientEventData { Type = ClientEventType.ClientListReceived, ArrayArg = users });
         }
 
         private void HandleConnectionFailed(string reason)
         {
-            _mainThreadActions.Enqueue(() => {
-                _activeLogger?.LogError(LogFilter.Error, $"연결 실패: {reason}");
-                OnConnectionFailed?.Invoke(reason);
-                if (_shouldReconnect && !_isReconnecting) StartReconnection();
-            });
+            _eventQueue.Enqueue(new ClientEventData { Type = ClientEventType.ConnectionFailed, StringArg1 = reason });
         }
 
         private void HandleKicked(string reason)
         {
-            _mainThreadActions.Enqueue(() => {
-                _activeLogger?.LogWarning(LogFilter.System, $"강제 퇴장: {reason}");
-                OnKicked?.Invoke(reason);
-            });
+            _eventQueue.Enqueue(new ClientEventData { Type = ClientEventType.Kicked, StringArg1 = reason });
         }
 
         #endregion
@@ -412,7 +476,6 @@ namespace work.ctrl3d
             _activeLogger?.Log(LogFilter.Connection, message);
         }
 
-        [Button, Group("Logging Controls")]
         public void EnableAllLogs() 
         {
             if (_activeLogger != null) _activeLogger.Filter = LogFilter.All;
@@ -420,7 +483,6 @@ namespace work.ctrl3d
             Log("모든 로그 활성화"); 
         }
 
-        [Button, Group("Logging Controls")]
         public void DisableAllLogs() 
         { 
             if (_activeLogger != null) _activeLogger.Filter = LogFilter.None;
